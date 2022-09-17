@@ -1,0 +1,201 @@
+PEP: 9999
+Title: Allow an optional leading vertical bar in match-case OR patterns
+Author: Ran Benita <ran@unusedvar.com>
+Sponsor: TODO
+PEP-Delegate:
+Discussions-To: [URL]
+Status: Draft
+Type: Standards Track
+Content-Type: text/x-rst
+Created: 17-Sep-2022
+Python-Version: 3.12
+Post-History: [`DD-MMM-YYYY <URL>`__]
+Resolution:
+
+
+Abstract
+========
+
+Allow writing an optional vertical bar ``|`` at the beginning of a ``match``-``case`` OR pattern,
+for cleaner git diffs and easier code movement.
+
+
+Motivation
+==========
+
+Writing an OR pattern in a one-value-per-line style can make sense for various reasons:
+
+1. To visually break a long line.
+2. To make it easier to add and remove values with code editor "add line"/"remove line" actions.
+3. To make it easier to transpose and sort the values.
+4. To make the code diff when a value is added or removed cleaner - only pure ``+`` or ``-`` diff without unrelated lines being affected.
+
+Currently, multi-line OR patterns may (reasonably) be written in one of two styles:
+
+Leading vertical bar:
+
+.. code:: py
+
+    match color:
+        case (
+            Color.RED |
+            Color.BLUE
+        ): ...
+
+Trailing vertical bar:
+
+.. code:: py
+
+    match color:
+        case (
+            Color.RED
+            | Color.BLUE
+        ): ...
+
+Both the leading and trailing styles have a problem: the last or first line (respectively) is special.
+If the special line is removed, or a new line added after/before it (respectively), unrelated lines must be edited as well.
+This negates reasons 2, 3 and 4 listed above.
+
+Using the leading vertical bar style, with the addition of a leading ``|`` on the first line, fixes the problem.
+
+.. code:: py
+
+    match color:
+        case (
+            | Color.RED
+            | Color.BLUE
+        ): ...
+
+
+Rationale
+=========
+
+The idea and proposed syntax is inspired by similar affordances in other languages:
+
+- Python PEG grammar `OR matches <https://peps.python.org/pep-0617/#e1-e2-1>`__ (required when spanning multiple lines)
+- OCaml `match expressions <https://ocaml.org/docs/data-types#a-simple-custom-type>`__
+- Rust `match expressions <https://rust-lang.github.io/rustfmt/?version=v1.5.1&search=#match_arm_leading_pipes>`__ (though not the default in rustfmt at the time of writing)
+- Haskell `case-of expressions <https://wiki.haskell.org/Case>`__ and `multi-way if expressions <https://ghc.gitlab.haskell.org/ghc/doc/users_guide/exts/multiway_if.html>`__
+- TypeScript `in type position <https://github.com/microsoft/TypeScript/pull/12386>`__
+
+
+Specification
+=============
+
+Change the ``or_pattern`` grammar rule from
+
+::
+
+    or_pattern: "|".`closed_pattern`+
+
+to
+
+::
+
+    or_pattern: "|"? "|".`closed_pattern`+
+
+The AST is not changed.
+
+
+Backwards Compatibility
+=======================
+
+There is no impact on existing code.
+
+
+Security Implications
+=====================
+
+None.
+
+
+How to Teach This
+=================
+
+The description of OR patterns in the Python Reference will be updated to mention the optional leading vertical var.
+
+I hope that auto-code formatters will format multi-line OR patterns using the "leading vertical bar on all lines" style.
+This will naturally clue users in on this syntax.
+
+
+Reference Implementation
+========================
+
+https://github.com/bluetech/cpython/pull/1
+
+
+Rejected Ideas
+==============
+
+Allow trailing vertical bar instead of leading
+''''''''''''''''''''''''''''''''''''''''''''''
+
+Instead of allowing an optional leading ``|``, allow an optional trailing ``|``.
+
+This is consistent with trailing commas.
+
+Rejected firstly because I think it looks less tidy when the vertical bars are not aligned:
+
+.. code:: py
+
+    match color:
+        case (
+            Color.RED |
+            Color.BLUE |
+        ): ...
+
+Vertical bars are not entirely analogous to commas:
+
+- Commas do not "fill" the space and are not symmetric, so look less nice when aligned.
+- Commas stick to the preceding word, which makes them arguably more natuarally trailing.
+- Commas have expectations from standard writing punctuation.
+
+Second, PEP-8 advises binary operators to be written in the leading position.
+Even though the ``|`` under discussion is not an operator, I think it is similar in terms of style.
+
+Third, the popular Black auto-formatter formats multi-line OR patterns with leading ``|``\s.
+Allowing only trailing ``|`` would require Black to change its formatting in order to take advantage of this PEP.
+
+
+Allow both leading and trailing vertical bar
+''''''''''''''''''''''''''''''''''''''''''''
+
+Rejected because, let's have only one way to do it.
+
+
+Require the leading vertical bar
+''''''''''''''''''''''''''''''''
+
+Following the "there's only one way to do it" principle, instead of making the leading ``|`` optional, require it.
+
+Rejected because it is not backward compatible. Also, it does not look good in single-line OR patterns.
+
+
+Reject ``case | x: ...`` (single value)
+'''''''''''''''''''''''''''''''''''''''
+
+Disallow the leading ``|`` when there's only one value in the pattern:
+
+.. code:: py
+
+    match color:
+        case (
+            | Color.RED
+        ): ...
+
+Rejected because there is a use case for this -
+"future proofing" a ``case`` which currently has only a single value but where the programmer expects further values to be added.
+This allows the additions to be done in a diff-clean way.
+
+
+Open Issues
+===========
+
+None.
+
+
+Copyright
+=========
+
+This document is placed in the public domain or under the
+CC0-1.0-Universal license, whichever is more permissive.
